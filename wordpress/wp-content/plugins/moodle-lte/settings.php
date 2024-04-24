@@ -17,9 +17,4 @@ function custom_form_register_settings_1() {
     register_setting('custom_form_settings_group', 'access_token');
 }
 add_action('admin_init', 'custom_form_register_settings_1');
-
-
-// Add a function to add settings to wordpress
-
-
 ?>

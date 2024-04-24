@@ -1,0 +1,6 @@
+{
+    "require": {
+        "tecnickcom/tcpdf": "^6.7",
+        "symfony/var-dumper": "^5.4"
+    }
+}
