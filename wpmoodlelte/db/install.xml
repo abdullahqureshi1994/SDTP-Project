@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<XMLDB PATH="enrol/wpmoodlelte/db" VERSION="20170327" COMMENT="XMLDB file for Moodle enrol/wpmoodlelte"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd"
+>
+    <TABLES>
+        <TABLE NAME="enrol_wpmoodlelte" COMMENT="Enrolment wpmoodleltes for enrol_easy">
+            <FIELDS>
+                <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+                <FIELD NAME="user_id" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="enrol_id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+                <FIELD NAME="course_id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+                <FIELD NAME="invoice_id" TYPE="int" LENGTH="20" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="due_date" TYPE="datetime" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="created_date" TYPE="datetime" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="total_amount" TYPE="int" LENGTH="11" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="paid_status" TYPE="char" LENGTH="24" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="paid_date" TYPE="datetime" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="email" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="mobile" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="url_for_online_payment" TYPE="text" LENGTH="255" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="url_for_download_wpmoodlelte" TYPE="text" LENGTH="255" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="raw_response" TYPE="text" LENGTH="255" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="deleted_at" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="enrolled_at" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+            </FIELDS>
+            <KEYS>
+                <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+            </KEYS>
+        </TABLE>
+
+        <TABLE NAME="enrol_wpmoodlelte_items" COMMENT="Enrolment wpmoodlelte items for enrol_easy">
+            <FIELDS>
+                <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+                <FIELD NAME="enrol_wpmoodlelte_id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+                <FIELD NAME="title" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"/>
+                <FIELD NAME="course_id" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="amount" TYPE="int" LENGTH="20" NOTNULL="true" SEQUENCE="false"/>
+            </FIELDS>
+            <KEYS>
+                <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+                <KEY NAME="foreign-key" TYPE="foreign" FIELDS="enrol_wpmoodlelte_id" REFFIELDS="id" REFTABLE="enrol_wpmoodlelte"/>
+            </KEYS>
+        </TABLE>
+    </TABLES>
+</XMLDB>

@@ -124,9 +124,26 @@ function moodle_lte_shortcode($atts) {
         'post_type' => 'course',
         'posts_per_page' => -1, // Retrieve all courses
     ));
+    $pdf_path = false;
+    if (isset($_GET['pdf_path'])) {
+        $pdf_path = $_GET['pdf_path'];
+    }
+
+    // while ($courses_query->have_posts()) : dump($courses_query->the_post(), the_ID(), get_post_meta(84,'_moodle_course_id', true) );
+    // endwhile;
 
     ob_start(); ?>
     <style>
+        .alert.alert-success {
+            color: #1d291c;
+            background-color: #a3e79f;
+            width: 100%;
+            padding: 15px 30px;
+            border-radius: 10px;
+            margin: 30px 0px;
+            font-weight: 600;
+            font-size: 18px;
+        }
         #custom-form .form-control {
             display: block;
             width: 100%;
@@ -169,8 +186,25 @@ function moodle_lte_shortcode($atts) {
         .text-center{
             text-align: center;
         }
+        .d-flex.justify-content-center{
+            display: flex;
+            justify-content: space-between;
+        }
+        #custom-form .btn-secondary {
+            color: #fff;
+            background-color: #28284D;
+            border-color: #28284D;
+            cursor: pointer;
+        }
     </style>
-    <form id="custom-form" method="get">
+    <?php if($pdf_path){ ?>
+        <div class="d-flex justify-content-center">
+            <div class="alert alert-success">Form Submitted successfully! Please download Invoice</div>
+        </div>
+    <?php } ?>
+    <form id="custom-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" enctype="application/x-www-form-urlencoded" >
+        <input type="hidden" name="action" value="handle_moodle_lte_form_submission">
+    
         <label for="full_name" class="control-label">Full Name:</label>
         <input type="text" id="full_name" name="full_name" required class="form-control"><br>
 
@@ -182,8 +216,8 @@ function moodle_lte_shortcode($atts) {
             <?php 
             // Loop through each course and add as an option in the dropdown
             if ($courses_query->have_posts()) :
-                while ($courses_query->have_posts()) : $courses_query->the_post(); ?>
-                    <option value="<?php the_ID(); ?>"><?php the_title(); ?></option>
+                while ($courses_query->have_posts()) : $courses_query->the_post();?>
+                    <option value="<?= get_the_ID(); ?>"><?php the_title(); ?></option>
                 <?php endwhile;
                 wp_reset_postdata(); // Reset post data
             endif; ?>
@@ -191,9 +225,17 @@ function moodle_lte_shortcode($atts) {
 
         <label for="mobile">Mobile:</label>
         <input type="text" id="mobile" name="mobile" required class="form-control" ><br>
-        <div class="text-center">
-            <input type="submit" class="btn btn-primary" name="submit" role="button" value="Enroll Now">
-        </div>
+        
+        <?php if($pdf_path){ ?>
+            <div class="d-flex justify-content-center">
+                <a target="_blank" class="btn btn-secondary" href="<?= $pdf_path; ?>">Download Invoice</a></p>
+                <button type="submit" class="btn btn-secondary" name="submit" role="button" value="enroll">Submit</button>
+            </div>
+        <?php } else { ?>
+            <div class="text-center">
+                <button type="submit" class="btn btn-secondary" name="submit" role="button" value="enroll">Submit</button>
+            </div>
+        <?php } ?>
     </form>
 
     <?php
@@ -204,54 +246,79 @@ add_shortcode('moodle_lte_form', 'moodle_lte_shortcode');
 
 // Function to handle form submission
 function handle_moodle_lte_form_submission() {
-    if (isset($_GET['submit'])) {
-        $full_name = sanitize_text_field($_GET['full_name']);
-        $email = sanitize_email($_GET['email']);
-        $course = sanitize_text_field($_GET['course']);
-        $mobile = sanitize_text_field($_GET['mobile']);
+    if (isset($_POST['submit'])) {
+        $full_name = sanitize_text_field($_POST['full_name']);
+        $email = sanitize_email($_POST['email']);
+        $course = sanitize_text_field($_POST['course']);
+        $mobile = sanitize_text_field($_POST['mobile']);
 
         // Get API endpoint URL and access token from plugin settings
         $api_endpoint = get_option('api_endpoint');
         $access_token = get_option('access_token');
 
-        $invoice_id = generateInvoice($customer = $full_name, $amount = '1000', $course_id = $course, $email = $email);
+        $moodle_course_id = get_post_meta($course,'_moodle_course_id', true);
+        $moodle_enrol_instance_id = get_post_meta($course,'_moodle_enrol_instance_id', true);
+        $price = get_post_meta($course,'_course_price', true);
+
+        $invoice_id = generateInvoice($customer = $full_name, $amount = $price, $course_id = $moodle_course_id, $email = $email);
+        // dump($invoice_id);
         $pdf_path = generatePDFInvoice($invoice_id);
 
-        if($invoice_id && $pdf_path){
-            echo '<p>Thank you for submitting the form. Here is your link: <a href="' . $pdf_path . '">Download Invoice</a></p>';
+        //Make entry to Moodle API endpoint
 
-        }
+        $query = [
+            "wstoken" => $access_token,
+            "moodlewsrestformat" => 'json',
+            "wsfunction" => 'enrol_wpmoodlelte_enrol_user',
+            "courseid" => $moodle_course_id,
+            "invoice_id" => $invoice_id['number'],
+            "date" => $invoice_id['date'],
+            "status" => "Paid",//$invoice_id['status'],
+            "amount" => $invoice_id['amount'],
+            "instanceid" => $moodle_enrol_instance_id,
+            "name" => rawurlencode($full_name),
+            "email" => $email,
+            "download_invoice" => $pdf_path,
+          ];
+        
+        $api_endpoint = $api_endpoint."/webservice/rest/server.php?".http_build_query($query);
+
+
         // Call the API
-        /* $response = wp_remote_post($api_endpoint, array(
+        $response = wp_remote_post($api_endpoint, array(
             'headers' => array(
-                'Authorization' => 'Bearer ' . $access_token,
                 'Content-Type' => 'application/json'
-            ),
-            'body' => json_encode(array(
-                'full_name' => $full_name,
-                'email' => $email,
-                'course' => $course,
-                'mobile' => $mobile
-            ))
+            )
         ));
 
         // Handle API response
         if (!is_wp_error($response)) {
             $body = wp_remote_retrieve_body($response);
             $data = json_decode($body);
-
             // Display link based on API response
-            if ($data && $data->success) {
-                echo '<p>Thank you for submitting the form. Here is your link: <a href="' . $data->link . '">Download Link</a></p>';
+            if ($data && $data->status) {
+                echo '<p>Thank you for submitting the form. Here is your link: <a href="' . $data->data->url_for_download_wpmoodlelte . '">Download Link</a></p>';
             } else {
                 echo '<p>There was an error processing your request. Please try again later.</p>';
             }
         } else {
             echo '<p>There was an error processing your request. Please try again later.</p>';
-        } */
+        }
+
+        if($invoice_id && $pdf_path){
+            // Redirect back to the page with a success message
+            wp_redirect(add_query_arg('pdf_path', urlencode($pdf_path), wp_get_referer()));
+            exit();
+        } else {
+            // Redirect back to the page with an error message
+            wp_redirect(add_query_arg('error', '1', wp_get_referer()));
+            exit();
+        }
     }
 }
-add_action('init', 'handle_moodle_lte_form_submission');
+// add_action('init', 'handle_moodle_lte_form_submission');
+add_action('admin_post_handle_moodle_lte_form_submission', 'handle_moodle_lte_form_submission');
+
 
 // Plugin settings page
 function moodle_lte_settings_page() {
@@ -291,10 +358,10 @@ function moodle_lte_settings_page_content() {
                     <th scope="row">Access Token</th>
                     <td><input type="text" name="access_token" value="<?php echo esc_attr(get_option('access_token')); ?>" /></td>
                 </tr>
-                <tr valign="top">
+                <!-- <tr valign="top">
                     <th scope="row">Service Name</th>
                     <td><input type="text" name="service_name" value="<?php echo esc_attr(get_option('service_name')); ?>" /></td>
-                </tr>
+                </tr> -->
             </table>
             <?php submit_button(); ?>
         </form>
@@ -309,6 +376,9 @@ function moodle_lte_settings_page_content() {
             </table>
             <?php submit_button('Sync Courses', 'primary', 'sync_courses_button'); ?>
         </form>
+
+        <h3>ShortCode</h3>
+        <p>Use this shortcode to embed course registration form <strong>[moodle_lte_form]</strong></p>
     </div>
     <?php
 }
@@ -329,17 +399,6 @@ function handle_sync_courses_button() {
         wp_redirect($redirect_url);
         exit;
 
-
-        // Display success or error message
-        /* if ($result === true) {
-            // dump($result);
-            add_settings_error('moodle_lte_messages', 'sync_success', 'Courses synchronized successfully.', 'updated');
-        } else {
-            add_settings_error('moodle_lte_messages', 'sync_error', 'Error synchronizing courses: ' . $result, 'error');
-        }
-        // Redirect back to settings page
-        wp_redirect(admin_url('admin.php?page=moodle-lte-settings'));
-        exit; */
     }
 }
 add_action('admin_post_sync_courses_button', 'handle_sync_courses_button', 10);
@@ -375,9 +434,6 @@ function synchronize_courses_from_moodle_to_wordpress() {
         'method' => 'POST',
         'body' => http_build_query($params)
     ));
-    // dump(get_option('api_endpoint'));
-    // dump($params);
-    // dump($response);
     
     // Check if request was successful
     if (!is_wp_error($response) && $response['response']['code'] === 200) {
@@ -388,6 +444,7 @@ function synchronize_courses_from_moodle_to_wordpress() {
         // Check if courses were returned
         if (isset($data) && is_array($data)) {
             $courses = $data;
+            // dump($courses);
             foreach ($courses as $course) {
                 // Create a new draft post
                 $post_id = wp_insert_post(array(
@@ -396,7 +453,7 @@ function synchronize_courses_from_moodle_to_wordpress() {
                     'post_type' => 'course', // Your custom post type for courses
                     'post_status' => 'draft' // Set the post status to draft
                 ));
-            
+                // dump(is_wp_error($post_id));
                 // Check if post was created successfully
                 if (!is_wp_error($post_id)) {
                     // Save additional course data as post meta
@@ -522,6 +579,7 @@ function moodle_lte_render_course_meta_box($post) {
     $course_instructor = get_post_meta($post->ID, '_course_instructor', true);
     $course_duration = get_post_meta($post->ID, '_course_duration', true);
     $moodle_course_id = get_post_meta($post->ID, '_moodle_course_id', true);
+    $moodle_enrol_instance_id = get_post_meta($post->ID, '_moodle_enrol_instance_id', true);
     $course_price = get_post_meta($post->ID, '_course_price', true);
 
     wp_nonce_field(basename(__FILE__), 'moodle_lte_course_meta_box_nonce');
@@ -537,6 +595,10 @@ function moodle_lte_render_course_meta_box($post) {
     <p>
         <label for="moodle_course_id">Moodle Course Id:</label><br>
         <input type="text" id="moodle_course_id" name="moodle_course_id" value="<?php echo esc_attr($moodle_course_id); ?>">
+    </p>
+    <p>
+        <label for="moodle_enrol_instance_id">Moodle Enrol Instance Id:</label><br>
+        <input type="text" id="moodle_enrol_instance_id" name="moodle_enrol_instance_id" value="<?php echo esc_attr($moodle_enrol_instance_id); ?>">
     </p>
     <p>
         <label for="course_price">Course Price:</label><br>
@@ -560,6 +622,9 @@ function moodle_lte_save_course_meta_data($post_id) {
         // Save/update course moodle id meta data
         if (isset($_POST['moodle_course_id'])) {
             update_post_meta($post_id, '_moodle_course_id', sanitize_text_field($_POST['moodle_course_id']));
+        }
+        if (isset($_POST['moodle_enrol_instance_id'])) {
+            update_post_meta($post_id, '_moodle_enrol_instance_id', sanitize_text_field($_POST['moodle_enrol_instance_id']));
         }
         // Save/update course price meta data
         if (isset($_POST['course_price'])) {
@@ -621,3 +686,23 @@ function moodle_lte_enqueue_admin_scripts($hook_suffix) {
     }
 }
 add_action('admin_enqueue_scripts', 'moodle_lte_enqueue_admin_scripts');
+
+
+add_filter( 'elementor/dynamic_tags/get_tags', function( $tags ) {
+    // Define your custom meta fields here
+    $custom_meta_fields = array(
+        'custom_meta_field_1' => array(
+            'title' => 'Custom Meta Field 1',
+            'group' => 'Custom Meta Fields', // Optional: Group your tags under a specific category
+        ),
+        'custom_meta_field_2' => array(
+            'title' => 'Custom Meta Field 2',
+            'group' => 'Custom Meta Fields',
+        ),
+    );
+
+    // Merge your custom meta fields with the existing tags
+    $tags = array_merge( $tags, $custom_meta_fields );
+
+    return $tags;
+} );
